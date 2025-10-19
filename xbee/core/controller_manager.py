@@ -4,6 +4,7 @@ Seperates controller logic from main XBee comms class.
 """
 
 import pygame
+from math import floor
 from typing import Dict, Optional
 from pygame.event import Event
 
@@ -344,7 +345,6 @@ class InputProcessor:
             int: Converted value
         """
 
-        from math import floor
         new_value = floor(multiplier * value + constants.JOYSTICK.NEUTRAL_INT)
         
         # Clamp to valid range

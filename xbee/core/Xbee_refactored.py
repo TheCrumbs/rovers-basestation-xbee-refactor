@@ -29,7 +29,6 @@ from .heartbeat import HeartbeatManager
 from .controller_manager import ControllerManager, InputProcessor
 from .communication import CommunicationManager
 from .udp_communication import SimulationCommunicationManager
-from .message_system import message_codec
 
 class XbeeControlRefactored:
     """
@@ -148,7 +147,7 @@ class XbeeControlRefactored:
             new_event.type != pygame.JOYDEVICEADDED):
             return None
         
-        # Route the event to corsponding handler
+        # Route the event to corresponding handler
         event_handlers = {
             pygame.JOYDEVICEADDED: self._handle_controller_hotplug,
             pygame.JOYDEVICEREMOVED: self._handle_controller_hotplug,
@@ -211,14 +210,14 @@ class XbeeControlRefactored:
         """
         self.update_loop += 1
         
-        # Handle heartbeat
-        if self.xbee_enabled and self.heartbeat_manager:
+        # Handle heartbeat (works in both real and simulation modes)
+        if self.heartbeat_manager:
             heartbeat_sent = self.heartbeat_manager.update()
             if heartbeat_sent:
                 print(f"Heartbeat sent (update #{self.update_loop})")
         
-        # Send the controller data
-        if self.xbee_enabled and self.communication_manager:
+        # Send the controller data (works in both real and simulation modes)
+        if self.communication_manager:
             xbox_values = self.controller_manager.controller_state.get_controller_values("xbox")
             n64_values = self.controller_manager.controller_state.get_controller_values("n64")
             
@@ -235,19 +234,28 @@ class XbeeControlRefactored:
         """
         Send quit message to the rover when shutting down.
         """
-        if self.xbee_enabled and self.communication_manager:
+        if self.communication_manager:
             self.communication_manager.send_quit_message()
     
     def cleanup(self):
         """
         Clean up resources when shutting down.
         """
+        # Close XBee device if it was used
         if self.xbee_enabled and hasattr(self, 'xbee_device'):
             try:
                 self.xbee_device.close()
                 print("XBee device closing success")
             except Exception as e:
                 print(f"Error closing XBee device: {e}")
+        
+        # Close simulation communication manager if it was used
+        cleanup_fn = getattr(self.communication_manager, 'cleanup', None)
+        if callable(cleanup_fn):
+            try:
+                cleanup_fn()
+            except Exception as e:
+                print(f"Error during communication manager cleanup: {e}")
     
     @property # For readonly and make it accessible like an attribute
     def creep_mode(self) -> bool:

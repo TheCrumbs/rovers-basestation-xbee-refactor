@@ -1,4 +1,5 @@
 import time
+import warnings
 from types import SimpleNamespace
 from unittest.mock import Mock
 import pytest
@@ -6,11 +7,13 @@ import socket
 import threading
 import json
 
+# Suppress pygame pkg_resources deprecation warning
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated", category=UserWarning)
+
 from xbee.core.command_codes import CONSTANTS
 from xbee.core.heartbeat import HeartbeatTester, HeartbeatManager
 from xbee.core.controller_manager import ControllerState, ControllerManager
 from xbee.core.communication import MessageFormatter, CommunicationManager
-from xbee.core.message_system import message_codec, MessageType, HeartbeatMessage, ControllerDataMessage, TelemetryMessage
 from xbee.core.udp_communication import UdpMessage, UdpCommunicationManager, SimulationCommunicationManager
 
 def test_constants_and_enums():
@@ -209,43 +212,6 @@ def test_simulation_mode_constant():
         assert hasattr(CONSTANTS.COMMUNICATION, 'UDP_TELEMETRY_PORT')
 
 
-def test_message_system():
-    """
-    Test the expandable message encoding/decoding system.
-    """
-    # Test heartbeat message
-    heartbeat = message_codec.create_heartbeat("alive")
-    encoded = message_codec.encode_message(heartbeat)
-    decoded = message_codec.decode_message(encoded)
-    
-    assert isinstance(decoded, HeartbeatMessage)
-    assert decoded.status == "alive"
-    assert decoded.message_type == MessageType.HEARTBEAT
-    
-    # Test controller data message
-    xbox_data = {'axis_ly': 100, 'axis_ry': 150, 'button_a': 1}
-    n64_data = {'axis_x': 120, 'axis_y': 80}
-    controller_msg = message_codec.create_controller_data(xbox_data, n64_data, True)
-    encoded = message_codec.encode_message(controller_msg)
-    decoded = message_codec.decode_message(encoded)
-    
-    assert isinstance(decoded, ControllerDataMessage)
-    assert decoded.xbox_data == xbox_data
-    assert decoded.n64_data == n64_data
-    assert decoded.reverse_mode is True
-    
-    # Test telemetry message
-    sensor_data = {'temperature': 25.5, 'humidity': 60.0}
-    system_status = {'battery': 85, 'status': 'ok'}
-    telemetry = message_codec.create_telemetry(sensor_data, system_status)
-    encoded = message_codec.encode_message(telemetry)
-    decoded = message_codec.decode_message(encoded)
-    
-    assert isinstance(decoded, TelemetryMessage)
-    assert decoded.sensor_data == sensor_data
-    assert decoded.system_status == system_status
-
-
 def test_udp_message():
     """
     Test UDP message format for simulation mode.
@@ -350,25 +316,6 @@ def test_mock_rover_simulation():
     rover.stop()
     time.sleep(0.1)  # Give threads time to shutdown
     assert rover.running is False
-
-
-def test_message_codec_extensibility():
-    """
-    Test that the message codec is easily extensible.
-    """
-    # Test that we can get supported types
-    supported_types = message_codec.get_supported_types()
-    assert MessageType.HEARTBEAT in supported_types
-    assert MessageType.CONTROLLER_DATA in supported_types
-    assert MessageType.TELEMETRY in supported_types
-    
-    # Test that GPS message type was registered (from message_system.py)
-    assert MessageType.GPS_DATA in supported_types
-    
-    # Test message type name mapping
-    assert MessageType.get_name(MessageType.HEARTBEAT) == "HEARTBEAT"
-    assert MessageType.get_name(MessageType.CONTROLLER_DATA) == "CONTROLLER_DATA"
-    assert MessageType.get_name(0xFF) == "QUIT"
 
 
 class MockRover:

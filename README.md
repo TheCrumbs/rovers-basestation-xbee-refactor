@@ -68,17 +68,17 @@ Also in `command_codes.py`:
 
 ```
 User Input → Pygame Events → ControllerManager → InputProcessor 
-→ MessageFormatter/MessageCodec → CommunicationManager → Rover
+→ MessageFormatter → CommunicationManager → Rover
 ```
 
 ### Message Formats
 
-The code supports two msg formats:
+The system uses a compact 10-byte message format for communication:
 
-**Old Format (10 bytes, compact)**
-- Used by `MessageFormatter` 
+**Compact Format (10 bytes ish probs)**
+- Used by `MessageFormatter` in both real hardware and simulation modes
 - Fixed size, bit-packed controller data
-- Good for embedded systems with limited bandwidth
+- Optimized for embedded systems with limited bandwidth and latency requirements
 
 Format:
 ```
@@ -86,44 +86,13 @@ Format:
    1     1   1    1     1     1       1       1       1       1
 ```
 
-**New Format (variable size, JSON)**
-- Used by `MessageCodec`
-- Header: type (1 byte) + msg ID (4 bytes) + timestamp (8 bytes) + length (2 bytes)
-- Payload: JSON data (variable length)
-- Better for debugging and extensibility
-
-Format:
-```
-[TYPE][MSG_ID][TIMESTAMP][LENGTH][JSON_PAYLOAD]
-  1      4        8         2        varies
-```
-
-- TYPE (1 byte)
-  - Msg type ID
-  - EX: `0x01` = command, `0x02` = telemetry, `0x03` = heartbeat
-  - Lets the receiver to quickly categorize incoming messages
-
-- MSG_ID (4 bytes)
-  - Unique msg ID
-  - Can be used for tracking and anti-duplication
-
-- TIMESTAMP (8 bytes)
-  - Unix timestamp in ms
-  - Lets you do time based syncing and calc latency
-  - 64-bit int (could probably lower but whatev)
-
-- LENGTH (2 bytes)
-  - Size of JSON_PAYLOAD in bytes
-  - Can be 0
-  - Max payload size: 65,535 bytes
-  - Lets receiver to allocate appropriate buffer
-
-- JSON_PAYLOAD (variable length)
-  - Optional, can be empty
-  - command/telemetry data
-  - Ex: `{"speed": 128, "direction": "forward"}`
-
-The compact format should be used for rover comms. See the compact msgs section below:
+- **START** (1 byte): Message identifier (0xDE for controller data)
+- **LY** (1 byte): Left joystick Y-axis value (0-200, 100=neutral)
+- **RY** (1 byte): Right joystick Y-axis value (0-200, 100=neutral)
+- **BTN1** (1 byte): First set of buttons (A, B, X, Y - 2 bits each)
+- **BTN2** (1 byte): Second set of buttons (Bumpers, Triggers - 2 bits each)
+- **START** (1 byte): N64 message identifier (0xDE)
+- **N64_B1-B4** (4 bytes): N64 button data (various button states - 2 bits each)
 
 ## Sending Messages
 
@@ -297,8 +266,7 @@ xbee/
     xbee_refactored.py       - Main control system
     controller_manager.py    - Controller input handling
     communication.py         - XBee comms + MessageFormatter
-    udp_communication.py     - Simulation mode comms
-    message_system.py        - MessageCodec (JSON format)
+    udp_communication.py     - Simulation mode comms (UDP)
     heartbeat.py             - Heartbeat manager
     tkinter_display.py       - GUI display
 ```
@@ -312,7 +280,7 @@ Here's how stuff connects to each other:
 │              XbeeControlRefactored (Main)                   │
 │                                                             │
 │  - Coordinates all components                               │
-│  - Chooses XBee or UDP based on SIMULATION_MODE             │
+│  - Chooses comms type based on SIMULATION_MODE              │
 └─────────────────────────────────────────────────────────────┘
                               │
            ┌──────────────────┼──────────────────┐
@@ -333,26 +301,31 @@ Here's how stuff connects to each other:
                       │                          │
                       ▼                          │
             ┌──────────────────┐                 │
-            │ Communication    │◄────────────────┘
-            │   Manager        │
+            │  Communication   │◄────────────────┘
+            │    (Switched)    │
             └──────────────────┘
                       │
          ┌────────────┴────────────┐
          │                         │
          ▼                         ▼
 ┌─────────────────┐       ┌─────────────────┐
-│ MessageFormatter│       │ SimulationComm  │
-│  (bit-packed)   │       │   Manager       │
-└─────────────────┘       └─────────────────┘
-         │                         │
-         ▼                         ▼
-┌─────────────────┐       ┌─────────────────┐
-│  XBee Hardware  │       │  UDP Network    │
-│   (Real Rover)  │       │   (Testing)     │
+│ Real Hardware:  │       │ Simulation:     │
+│ Communication   │       │ Simulation      │
+│ Manager         │       │ CommManager     │
+│                 │       │                 │
+│ ┌─────────────┐ │       │ ┌─────────────┐ │
+│ │MessageFormat│ │       │ │ UDP Manager │ │
+│ │(10 bytes)   │ │       │ │  (JSON)     │ │
+│ └──────┬──────┘ │       │ └──────┬──────┘ │
+│        ▼        │       │        ▼        │
+│ ┌─────────────┐ │       │ ┌─────────────┐ │
+│ │XBee Hardware│ │       │ │UDP Network  │ │
+│ │(Real Rover) │ │       │ │ (Testing)   │ │
+│ └─────────────┘ │       │ └─────────────┘ │
 └─────────────────┘       └─────────────────┘
 ```
 
-Controller input:
+Controller input flow:
 
 ```
 User Input (physical controller)
@@ -370,7 +343,7 @@ InputProcessor (applies modes: creep, reverse)
 MessageFormatter (packs into bytes)
     │
     ▼
-CommunicationManager (sends via XBee or UDP)
+Communication Manager (XBee) OR SimulationCommManager (UDP)
     │
     ▼
 Rover receives data

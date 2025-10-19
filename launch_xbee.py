@@ -5,6 +5,10 @@ Should handle import paths correctly.
 
 import sys
 import os
+import warnings
+
+# Suppress pygame pkg_resources deprecation warning
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated", category=UserWarning)
 
 # Add current dir to py path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -20,3 +24,4 @@ except Exception as e:
     print(f"Error: {e}")
     import traceback
     traceback.print_exc()
+

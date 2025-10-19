@@ -316,32 +316,25 @@ class UdpCommunicationManager:
 
 class SimulationCommunicationManager:
     """
-    Wrapper that provides the same interface as CommunicationManager but uses UDP in simulation mode.
+    UDP-based communication manager for simulation mode.
+    Provides the same interface as CommunicationManager but uses UDP instead of XBee.
     """
     
     def __init__(self, xbee_device=None, remote_xbee=None):
         """
-        Initialize simulation communication manager.
+        Initialize simulation communication manager with UDP.
         
         Args:
             xbee_device: XBee device (ignored in simulation)
             remote_xbee: Remote XBee device (ignored in simulation)
         """
-        self.simulation_mode = CONSTANTS.SIMULATION_MODE
-        
-        if self.simulation_mode:
-            self.udp_manager = UdpCommunicationManager()
-            self.udp_manager.start()
-            print("Simulation communication manager initialized with UDP")
-        else:
-            # Import the real communication manager when not in simulation
-            from .communication import CommunicationManager
-            self.real_manager = CommunicationManager(xbee_device, remote_xbee)
-            print("Real communication manager initialized with XBee")
+        self.udp_manager = UdpCommunicationManager()
+        self.udp_manager.start()
+        print("Simulation communication manager initialized with UDP")
             
     def send_controller_data(self, xbox_values: Dict[Any, Any], n64_values: Dict[Any, Any], reverse_mode: bool) -> bool:
         """
-        Send controller data via appropriate communication method.
+        Send controller data via UDP.
         
         Args:
             xbox_values: Xbox controller values (keys can be int constants or strings)
@@ -351,22 +344,25 @@ class SimulationCommunicationManager:
         Returns:
             True if message was sent successfully
         """
-        if self.simulation_mode:
-            return self.udp_manager.send_controller_data(xbox_values, n64_values, reverse_mode)
-        else:
-            return self.real_manager.send_controller_data(xbox_values, n64_values, reverse_mode)
+        return self.udp_manager.send_controller_data(xbox_values, n64_values, reverse_mode)
             
     def send_quit_message(self) -> bool:
         """
-        Send quit message via appropriate communication method.
+        Send quit message via UDP.
         
         Returns:
             True if message was sent successfully
         """
-        if self.simulation_mode:
-            return self.udp_manager.send_quit_message()
-        else:
-            return self.real_manager.send_quit_message()
+        return self.udp_manager.send_quit_message()
+    
+    def send_heartbeat(self) -> bool:
+        """
+        Send heartbeat message via UDP (simulation mode).
+        
+        Returns:
+            True if message was sent successfully
+        """
+        return self.udp_manager.send_heartbeat()
             
     def register_telemetry_handler(self, handler: Callable[[Dict[str, Any]], None]):
         """
@@ -375,11 +371,9 @@ class SimulationCommunicationManager:
         Args:
             handler: Function to call when telemetry is received
         """
-        if self.simulation_mode:
-            def message_handler(message: UdpMessage):
-                handler(message.data)
-            self.udp_manager.register_message_handler('telemetry', message_handler)
-        # Real manager would handle this differently
+        def message_handler(message: UdpMessage):
+            handler(message.data)
+        self.udp_manager.register_message_handler('telemetry', message_handler)
         
     def get_telemetry_data(self) -> Dict[str, Any]:
         """
@@ -388,11 +382,7 @@ class SimulationCommunicationManager:
         Returns:
             Dictionary containing telemetry data
         """
-        if self.simulation_mode:
-            return self.udp_manager.last_telemetry.copy()
-        else:
-            # Real manager would implement this
-            return {}
+        return self.udp_manager.last_telemetry.copy()
             
     def get_statistics(self) -> Dict[str, Any]:
         """
@@ -401,16 +391,10 @@ class SimulationCommunicationManager:
         Returns:
             Dictionary containing communication stats
         """
-        if self.simulation_mode:
-            return self.udp_manager.get_statistics()
-        else:
-            # Real manager would implement this
-            return {'mode': 'xbee', 'connected': True}
+        return self.udp_manager.get_statistics()
             
     def cleanup(self):
         """
         Clean up communication resources.
         """
-        if self.simulation_mode:
-            self.udp_manager.stop()
-        # Real manager cleanup would be handled elsewhere
+        self.udp_manager.stop()

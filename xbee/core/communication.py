@@ -386,32 +386,23 @@ class CommunicationManager:
     Manages XBee comms and msg transmission.
     """
     
-    def __init__(self, xbee_device=None, remote_xbee=None, use_legacy_format: bool = True):
+    def __init__(self, xbee_device=None, remote_xbee=None):
         """
         Init the comms manager.
         
         Args:
             xbee_device: XBee device instance
             remote_xbee: Remote XBee device instance
-            use_legacy_format: If True, use fast 10-byte format. If False, use new flexible JSON format.
         """
         self.xbee_device = xbee_device
         self.remote_xbee = remote_xbee
         self.formatter = MessageFormatter()
         self.last_message = bytearray()
         self.enabled = True
-        self.use_legacy_format = use_legacy_format
-        
-        # Import message system only if needed (avoid circular imports)
-        if not use_legacy_format:
-            from .message_system import MessageCodec, ControllerDataMessage
-            self.codec = MessageCodec()
-        else:
-            self.codec = None
         
     def send_controller_data(self, xbox_values: Dict, n64_values: Dict, reverse_mode: bool = False) -> bool:
         """
-        Send controller data via XBee.
+        Send controller data via XBee using compact 10-byte format.
         
         Args:
             xbox_values: Xbox controller vals
@@ -425,17 +416,8 @@ class CommunicationManager:
             return False
             
         try:
-            if self.use_legacy_format:
-                # Fast 10-byte format (legacy)
-                message = self.formatter.create_combined_message(xbox_values, n64_values, reverse_mode)
-            else:
-                # New flexible JSON format with header
-                from .message_system import ControllerDataMessage
-                msg_obj = ControllerDataMessage(xbox_data=xbox_values, n64_data=n64_values, reverse_mode=reverse_mode)
-                if self.codec:
-                    message = self.codec.encode_message(msg_obj)
-                else:
-                    raise RuntimeError("Codec not initialized for new format")
+            # Use compact 10-byte format
+            message = self.formatter.create_combined_message(xbox_values, n64_values, reverse_mode)
             
             # Avoid sending dupe msgs
             if message == self.last_message:
@@ -553,38 +535,6 @@ class CommunicationManager:
         """
         self.enabled = False
         
-    def set_message_format(self, use_legacy: bool):
-        """
-        Switch between legacy fast format and new flexible format.
-        
-        Args:
-            use_legacy: True for 10-byte fast format, False for JSON format with header
-        """
-        if use_legacy == self.use_legacy_format:
-            return  # Already in this mode
-            
-        self.use_legacy_format = use_legacy
-        
-        if not use_legacy and self.codec is None:
-            # Initialize codec for new format
-            from .message_system import MessageCodec
-            self.codec = MessageCodec()
-            print("Switched to new flexible JSON format (larger, but extensible)")
-        elif use_legacy:
-            print("Switched to legacy fast format (10 bytes, optimized for speed)")
-            
-    def get_message_format_info(self) -> str:
-        """
-        Get info about current message format.
-        
-        Returns:
-            str: Description of current format
-        """
-        if self.use_legacy_format:
-            return "Legacy Format"
-        else:
-            return "New Format"
-    
     # Example messages
     # Add custom messages here, just define the message ID and format.
     
