@@ -10,9 +10,10 @@ Control system for the rover. Works with real XBee hardware or UDP simulation fo
 pip install virtualenv
 
 # Create and activate virtual environment
-virtualenv venv
-source venv\Scripts\activate  # Windows
-source venv/bin/activate  # Linux/Mac
+virtualenv .venv
+source .venv\Scripts\activate  # Windows Powershell
+source .venv/Scripts/activate  # Bash
+source .venv/bin/activate  # Linux/Mac
 
 # Install dependencies
 pip install -r requirements.txt
@@ -198,7 +199,7 @@ def handle_message(data: bytes):
         update_status(motor, battery, temp)
 ```
 
-## Data Packing Tips
+## Data Packing
 
 To keep msgs small, here's how to pack different data types:
 
@@ -251,102 +252,6 @@ motor_on = (flags >> 0) & 1   # Returns 1
 camera_on = (flags >> 1) & 1  # Returns 1
 arm_on = (flags >> 2) & 1     # Returns 0
 emergency = (flags >> 7) & 1  # Returns 1
-```
-
-## File Organization
-
-```
-launch_xbee.py          - Main launcher script
-run_tests.py            - Test runner
-
-xbee/
-  __main__.py           - Entry point (python -m xbee)
-  core/
-    command_codes.py         - Constants and config
-    xbee_refactored.py       - Main control system
-    controller_manager.py    - Controller input handling
-    communication.py         - XBee comms + MessageFormatter
-    udp_communication.py     - Simulation mode comms (UDP)
-    heartbeat.py             - Heartbeat manager
-    tkinter_display.py       - GUI display
-```
-
-## System Architecture
-
-Here's how stuff connects to each other:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│              XbeeControlRefactored (Main)                   │
-│                                                             │
-│  - Coordinates all components                               │
-│  - Chooses comms type based on SIMULATION_MODE              │
-└─────────────────────────────────────────────────────────────┘
-                              │
-           ┌──────────────────┼──────────────────┐
-           │                  │                  │
-           ▼                  ▼                  ▼
-    ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-    │ Controller  │   │ Heartbeat   │   │  Tkinter    │
-    │  Manager    │   │  Manager    │   │  Display    │
-    └─────────────┘   └─────────────┘   └─────────────┘
-           │                  │                  │
-           ▼                  │                  │
-    ┌─────────────┐           │                  │
-    │   Input     │           │                  │
-    │ Processor   │           │                  │
-    └─────────────┘           │                  │
-           │                  │                  │
-           └──────────┬───────┘                  │
-                      │                          │
-                      ▼                          │
-            ┌──────────────────┐                 │
-            │  Communication   │◄────────────────┘
-            │    (Switched)    │
-            └──────────────────┘
-                      │
-         ┌────────────┴────────────┐
-         │                         │
-         ▼                         ▼
-┌─────────────────┐       ┌─────────────────┐
-│ Real Hardware:  │       │ Simulation:     │
-│ Communication   │       │ Simulation      │
-│ Manager         │       │ CommManager     │
-│                 │       │                 │
-│ ┌─────────────┐ │       │ ┌─────────────┐ │
-│ │MessageFormat│ │       │ │ UDP Manager │ │
-│ │(10 bytes)   │ │       │ │  (JSON)     │ │
-│ └──────┬──────┘ │       │ └──────┬──────┘ │
-│        ▼        │       │        ▼        │
-│ ┌─────────────┐ │       │ ┌─────────────┐ │
-│ │XBee Hardware│ │       │ │UDP Network  │ │
-│ │(Real Rover) │ │       │ │ (Testing)   │ │
-│ └─────────────┘ │       │ └─────────────┘ │
-└─────────────────┘       └─────────────────┘
-```
-
-Controller input flow:
-
-```
-User Input (physical controller)
-    │
-    ▼
-Pygame Events (button/joystick)
-    │
-    ▼
-ControllerManager (captures state)
-    │
-    ▼
-InputProcessor (applies modes: creep, reverse)
-    │
-    ▼
-MessageFormatter (packs into bytes)
-    │
-    ▼
-Communication Manager (XBee) OR SimulationCommManager (UDP)
-    │
-    ▼
-Rover receives data
 ```
 
 ## Controller Settings
